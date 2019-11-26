@@ -1,0 +1,552 @@
+---
+title: "A Cross Validation R-function with Examples"
+author: "M & W"
+date: "24 September 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts = list(width.cutoff = 40), tidy = TRUE)
+#setwd("~/surfdrive/Predictive-Psychometrics/paper/crossvalidation")
+```
+
+
+# R-package xvalglms
+
+We developed a package *xvalglms* with the R-function \texttt{xval.glm} for cross validation of generalized linear models. The package can be downloaded from a Github page. The code of the function is given in the following box.
+
+```{r}
+library("xvalglms")
+```
+
+The \texttt{xval.glm} function requires a few input statements:
+
+- A data frame with the data;
+- A list of models to be compared;
+- \texttt{glm.family}: A family for generalized linear models, which defaults to the Gaussian family, but can be changed to binomial or poisson or any other family (see glm help function);
+- \texttt{folds}: The number of folds, K, which defaults to 10;
+- \texttt{repeats}: The number of repeats, i.e. cycles of the K-fold cross validation (defaults to 200);
+- \texttt{loss}: loss function for the GLM (default = NULL equals RMSE);
+- \texttt{numCore}: number of cores for use with parallel computation (default = NULL, equals no parallelization);
+- \texttt{plots}: whether plots should be made or not (default is yes);
+- \texttt{gray}: output greyscale plots;
+- \texttt{seed}: a seed can be inserted to make the results reproducible. 
+
+# Tutorial examplary cross validation analyses
+
+In the following we show several data analysis procedures comparable to a one sample t-test, two sample t-test, simple regression, multiple regression, and logistic regression where we use cross validation as the tool for help making decisions about model selction. 
+
+Overall, the research questions we discuss can be translated into a comparison of two (or more) models. The translated question is then which of the two models gives the most accurate predictions. The model that provides the most accurate predictions is selected and interpreted. 
+
+For comparison, for every example we also show the standard analysis approach.
+
+# Is the mean equal to a prespecified number?
+
+This question compares to a one sample t-test, where we see whether the mean differs from a prespecified number. 
+
+## Example 1
+
+Often we ask ourselves the question whether the mean of a population is equal to a prespecified number ($\mu_0$). 
+
+Let us first load some data. Description
+```{r}
+library(foreign)
+mydat = read.spss("https://stats.idre.ucla.edu/stat/data/hsb2.sav", to.data.frame = TRUE)
+summary(mydat$WRITE)
+```
+
+
+We test whether the mean in writing is equal to 50 (i.e. $\mu_0 = 50$) by rephrasing the question as follows: if we estimate the mean from the data and use this mean to make predictions is that more accurate than simply predicting 50. 
+
+
+```{r}
+mu0 = 50
+# The two models
+models = vector(mode = "list", length = 2)
+models[[1]] = I(WRITE - 50) ~ 0
+models[[2]] = I(WRITE - 50) ~ 1
+output = xval.glm(data = mydat, models)
+```
+
+We see that the predictions really become better when using the sample mean, compared to simply predict 50. Furthermore, in all 100 repeats the prediction error of the more complicated model (where we estimate the mean to make a prediction) wins from just predicting 50; we can see that at the top of the Figure where the number of `wins' is reported. 
+
+Therefore, we better use the estimated mean to make a prediction. The outcome of the analysis is
+```{r}
+result = glm(models[[2]], data = mydat)
+summary(result)
+```
+where we see that the estimated mean is 50 plus the estimated intercept, which is `r mu0 + coef(result)`. This latter number would be the predicted value for future cases. 
+
+## Standard analysis approach
+
+```{r}
+t.test(mydat$WRITE-50)
+```
+
+## Example 2
+
+Another example from Howell, page 187-188. Nurcombe et al. (1984) reported on an intervention program for the mothers of low-birthweight (LBW) infants. These infants present special problems to their parents because they are unresponsive and unpredictable, in addition to being at risk for physical and developmental problems. One of the dependent variables in the study was the Psychomotor Development Index (PDI). This scale was first administered to all infants in the study when they were six months old. The question is whether these children are different from the normative population mean of 100, usually found with this index. We have data from 56 infants.  
+
+```{r}
+rm(models)
+PDI = read.table("http://www.uvm.edu/~dhowell/methods8/DataFiles/Tab7-1.dat", header = TRUE)
+summary(PDI)
+PDI$constant = 1
+```
+
+The observed mean is `r mean(PDI$PDIscore)` and the standard deviation is `r sd(PDI$PDIscore)`. We rephrase the question as follows. Are the predictions obtained with the mean of the sample better than when we predict 100 everytime. In other words, does using the data help making better predictions. The Root Mean Square of prediction error for the prediction 100 is easily computed as 
+$$
+\sqrt{\frac{1}{n}\sum_{i=1}^n (y_i - 100)^2}
+$$
+which is `r sqrt(mean((PDI$PDIscore - 100)^2))`, nevertheless we will also show the K-fold cross validation code for it.
+
+```{r}
+# The two models
+models = vector(mode = "list", length = 2)
+models[[1]] = I(PDIscore - 100) ~ 0
+models[[2]] = I(PDIscore - 100) ~ 1
+output = xval.glm(data = PDI, models)
+```
+
+
+The outcome of the analysis of the second model is
+```{r}
+result = glm(models[[2]], data = PDI)
+summary(result)
+```
+where we see that the estimated mean is 100 plus the estimated intercept, which is `r 100 + coef(result)`. This latter number would be the predicted value for future cases. 
+
+## Standard analysis approach
+
+```{r}
+t.test(PDI$PDIscore-100)
+```
+
+# Is there a difference between two groups?
+
+This analysis compares to a two sample t-test and can be easily generalized to a one-way ANOVA. 
+
+## Example 1
+
+In the same data set we also have the variable gender. 
+
+```{r, echo = FALSE}
+mydat$female2 = as.integer(mydat$FEMALE == "female")
+# p <- ggplot(mydat, aes(FEMALE, WRITE))
+# p + geom_boxplot() + geom_jitter(width = 0.2)
+```
+
+Usually we test whether the mean of males is equal to the mean of females (one can wonder whether this is actually a sensible test as means are never exactly equal). We better ask ourselves the question whether the use of gender provides better predictions of writing compared to predictions without gender?
+
+Therefore, we cross validate two models: The first only estimates an intercept (overall mean) so does not involve gender; The second uses also gender as a predictor. 
+
+```{r}
+# The two models
+models = vector(mode = "list", length = 2)
+models[[1]] = WRITE ~ 1
+models[[2]] = WRITE ~ 1 + female2
+output = xval.glm(data = mydat, models)
+```
+
+The results show that with the model including gender the predictions are more accurate. 
+
+The outcome of the analysis is
+```{r}
+result = glm(models[[2]], data = mydat)
+summary(result)
+```
+where we see that the estimated mean for men is `r coef(result)[1]` and that for women is `r sum(coef(result))`. For the future we would predict the first mean if we see a man, and the second mean when we see a woman. 
+
+The only assumption we make in this analysis is that the criterion variable is at least an interval variable. No normality, no homoscedasticity and we do not need the concept of degrees of freedom!
+
+## Standard analysis approach
+
+
+```{r}
+t.test(WRITE ~ female2, data = mydat)
+```
+
+The null hypothesis that the means are equal in the propulation is rejected. 
+
+## Example 2
+
+Another example from Howell, page 211.
+
+```{r}
+Arousal = read.spss("http://www.uvm.edu/~dhowell/methods8/DataFiles/Tab7-5.sav", to.data.frame = TRUE)
+Arousal$Group = as.factor(Arousal$Group)
+
+# The two models
+models = vector(mode = "list", length = 2)
+models[[1]] = Arousal ~ 1
+models[[2]] = Arousal ~ 1 + Group
+output = xval.glm(data = Arousal, models)
+```
+
+The second model gives better predictions and wins in all 100 repetitions. The estimated means for the two groups can be computed usin the oiutput of the model, i.e. 
+
+```{r}
+summary(glm(models[[2]], data = Arousal))
+```
+
+## Standard analysis approach
+
+```{r}
+t.test(Arousal ~ Group, data = Arousal)
+```
+
+# Is there a relationship between variable X and Y?
+
+## Univariate regression
+
+A general goal of the study conducted by Margolin and Medina was to examine how children's information processing is related to a history of exposure to marital aggression. Data are collected for 47 children. The variable \texttt{Aggression} is a measure of marital aggression that reflects physical, verbal, and emotional aggresion during the last year and the variable \texttt{test} is a child's score on a recall test. 
+
+```{r}
+agdat = read.table("https://dornsife.usc.edu/assets/sites/239/docs/marital_agg_dat.txt", header = TRUE)
+p <- ggplot(agdat, aes(Aggression, test))
+p + geom_point()
+```
+
+We define four different models. The first says, we best predict with the overall mean. The second until fourth include agression as a predictor, but the functional forms differ. The second model defines a linear relationship, the third a quadratic, and the fourth a cubic polynomial. 
+
+```{r}
+# The four models
+models = vector(mode = "list", length = 4)
+models[[1]] = test ~ 1
+models[[2]] = test ~ Aggression
+models[[3]] = test ~ poly(Aggression,2)
+models[[4]] = test ~ poly(Aggression,3)
+output = xval.glm(data = agdat, models)
+```
+
+The quadratic model makes the best predictions. Let us see the best fitted model, with the squared term of the predictor:
+```{r}
+p <- ggplot(agdat, aes(Aggression, test))
+p + geom_point() + geom_smooth(method = "lm", formula = y ~ poly(x, 2))
+```
+
+## Other loss function
+
+Here, instead of using the root mean squared error of prediction we look at the absolute value of the difference between the observed values and the predictions. Therefore we first have to define the loss function. This should be a function with two arguments, y and preds, the predictions. 
+
+```{r}
+abloss = function(y,preds){mean(abs(y-preds))}
+```
+
+Now we can run the four models from the previous section again, where prediction error is quantified in a different way, i.e. by the mean absolute error. We also make black and white plots.
+
+```{r}
+output = xval.glm(data = agdat, models, loss = abloss, gray = TRUE)
+```
+
+We see that the quadratic model still gives the best predictions. However, this model is not such a clear winner anymore. Evenmore, model 1 (the intercept only model), now outperforms model number 2 (the linear model). Looking at the plot of the different model estimates (using the intercept only, linear and quadratic model predictions), we can see why both models 1 and 2 seem to make approximately the same predicitions overall: model 2 is better in predicting high test scores for low aggression and low test scores for high aggression, while the intercept only model is better in predicting the low test scores for low aggression and the higher test scores for high aggression. Model 3 seems to do better overall, but still is relatively close to both models 1 and 2 in terms of prediction accuracy. Most likely, model 3 wins most of the time from model 2 due to the one participant with the highest aggression score (104) at the far right of the plot. But even with overlapping distributions, model 3 still has a lower prediction error in most repeats. This participant drives the winning of model 3 using the RMSEP more (since the prediction error is squared here) than in the analysis using the absolute loss function, hence explaining the difference in wins.
+
+
+```{r}
+p <- ggplot(agdat, aes(Aggression, test))
+p + geom_point(color=rgb(0,0,0,.5)) + geom_smooth(method = "lm", formula = y ~ 1, se = FALSE, color=gray(0)) + geom_smooth(method = "lm", formula = y ~ poly(x, 1), se = FALSE, color=gray(.33)) + geom_smooth(method = "lm", formula = y ~ poly(x, 2),se = FALSE, color=gray(.67)) 
+```
+
+## Standard analysis approach
+
+The standard analysis approach fits four rergession models and examines the change in $R^2$ and the corresponding incremental *F*-test to select a model. This approach assumes normally distributed error terms with zero mean and constant variance. In the following we show the results of the incremental *F*-tests and diagnostic plots considering the assumptions. As we can see the validity of the assumptions is questionable.
+
+```{r}
+out1 = lm(models[[1]], data = agdat)
+out2 = lm(models[[2]], data = agdat)
+out3 = lm(models[[3]], data = agdat)
+out4 = lm(models[[4]], data = agdat)
+anova(out1,out2,out3,out4)
+par(mfrow=c(2,3))
+plot(out3, which = c(1,2,3,4,5,6))
+```
+
+
+# Moderated regression analysis
+
+The data can be opbtained from: https://easy.dans.knaw.nl/ui/datasets/id/easy-dataset:100569. 
+
+```{r}
+attidat = read.spss("~/surfdrive/Shared/CVtutorial/TMMSStudy1Data.sav", to.data.frame = TRUE, use.value.labels = F)
+attidat = attidat[,c("wdefense", "ms", "Zsemean", "Zident")]
+# rename varaibles
+# A: positive Attitudes toward Muslims and multiculturalism (wdefense)
+# M: mortality salience (ms)
+# S: Self esteem (Zsemean)
+# N: National identification (Zident)
+colnames(attidat) = c("A", "M", "S", "N")
+
+library(psych)
+pairs.panels(attidat[,-2], 
+             method = "pearson", 
+             hist.col = "#00AFBB",
+             density = TRUE,
+             ellipses = TRUE)
+```
+
+We see in these graphs that there are 5 subjects which have quite extreme scores on the Self esteem and National identification variables, with standardized scores far beyond 3. We will analyze the data with and without these subjects removed. Therefore we create a reduced data frame with these observations removed. 
+
+```{r}
+attidat.r = attidat[-c(3,14,39,59,138),] # four observations with extremely large observations
+```
+
+## Original analysis
+
+The authors report the following analysis
+```{r}
+lm.out = lm(A ~ M * S * N, data = attidat)
+summary(lm.out)
+```
+
+Diagnostic plots for this analysis
+
+```{r}
+par(mfrow=c(2,3))
+plot(lm.out, which = c(1,2,3,4,5,6))
+```
+
+If we remove the five outliers from the data we obtain the following
+```{r}
+lm.out = lm(A ~ M * S * N, data = attidat.r)
+summary(lm.out)
+```
+
+## Cross validation analysis
+
+First define the 15 models of interest. 
+```{r}
+models = vector(mode = "list", length = 15)
+models[[1]] = A ~ 1 
+models[[2]] = A ~ M 
+models[[3]] = A ~ N
+models[[4]] = A ~ S
+models[[5]] = A ~ M + S 
+models[[6]] = A ~ M +  N
+models[[7]] = A ~ S + N
+models[[8]] = A ~ M + S + N
+models[[9]] = A ~ M * S + N
+models[[10]] = A ~ M + S * N
+models[[11]] = A ~ M * N + S
+models[[12]] = A ~ M * N + M * S
+models[[13]] = A ~ M * N + N * S
+models[[14]] = A ~ M * S + N * S
+models[[15]] = A ~ M * S + N * S + M * N
+models[[16]] = A ~ M * N * S
+```
+
+First the analysis on the complete data
+```{r}
+output = xval.glm(data = attidat, models, numCore = 14, gray = TRUE, seed = 123)
+```
+and a similar analysis on the data with the five persons removed
+```{r}
+output = xval.glm(data = attidat.r, models, numCore = 14, gray = TRUE, seed = 123)
+ggsave("~/surfdrive/Shared/CVtutorial/manuscript/attitude.pdf", output$box.plot)
+```
+
+## Standard analysis approach
+
+```{r}
+out1 = lm(models[[1]], data = attidat.r)
+out2 = lm(models[[2]], data = attidat.r)
+out3 = lm(models[[3]], data = attidat.r)
+out4 = lm(models[[4]], data = attidat.r)
+out5 = lm(models[[5]], data = attidat.r)
+out6 = lm(models[[6]], data = attidat.r)
+out7 = lm(models[[7]], data = attidat.r)
+out8 = lm(models[[8]], data = attidat.r)
+out9 = lm(models[[9]], data = attidat.r)
+out10 = lm(models[[10]], data = attidat.r)
+out11 = lm(models[[11]], data = attidat.r)
+out12 = lm(models[[12]], data = attidat.r)
+out13 = lm(models[[13]], data = attidat.r)
+out14 = lm(models[[14]], data = attidat.r)
+out15 = lm(models[[15]], data = attidat.r)
+out16 = lm(models[[16]], data = attidat.r)
+aovtab = anova(out1,out2,out3,out4,out5,out6,out7,out8, out9,out10,out11,out12, out13,out14,out15,out16)
+```
+
+
+A stepwise comparison of the models is given in the following table. In the column entitled ``Against'' we describe against which model the current model is compared. 
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{lrrrrrrr}
+\hline
+Model & Res.Df & RSS & Against & Df & Sum of Sq & F & Pr($>$F) \\ 
+\hline
+1 & 132  & 64.90 &    &       &      &  \\ \hline
+2 & 131 & 64.66 & 1 & 1 & 0.25 & 0.50 & 0.4793 \\
+3 & 131 & 56.76 & 1 & 1 & 8.14 & 18.79 & 0.0000 \\ 
+4 & 131 & 64.50 & 1 & 1 & 0.41 & 0.83 & 0.3647 \\ \hline
+5 & 130 & 64.27 & 4 & 1 & 0.22 & 0.45 & 0.5029 \\ 
+6 & 130 & 56.65 & 3 & 1 & 0.11 & 0.26 & 0.6142 \\ 
+7 & 130 & 56.24 & 3 & 1 & 0.52 & 1.21 & 0.2728 \\ \hline
+8 & 129 & 56.14 & 7 & 1 & 0.09 & 0.21 & 0.6473 \\ \hline
+9 & 128 & 54.81 & 8 & 1 & 1.33 & 3.11 & 0.0802 \\ 
+10 & 128 & 56.14 & 8 & 1 & 0.00 & 0.01 & 0.9358 \\ 
+11 & 128 & 56.02 & 8 & 1 & 0.12 & 0.28 & 0.5950 \\ \hline
+12 & 127 & 54.71 & 9 & 1 & 0.10 & 0.23 & 0.6306 \\ 
+13 & 127 & 56.02 & 11 & 1 & 0.00 & 0.00 & 0.9780 \\ 
+14 & 127 & 54.80 & 9 & 1 & 0.01 & 0.03 & 0.8559 \\ \hline
+15 & 126 & 54.71 & 12 & 1 & 0.01 & 0.02 & 0.8942 \\ \hline
+16 & 125 & 51.57 & 15 & 1 & 3.13 & 7.60 & 0.0067 \\
+\hline
+\end{tabular}
+\end{table}
+
+To verify the assumptions we make some diagnostic plots of the most complex model. Especially the QQ plot raises some concern anout the distributional assumptions of the residuals. If this assumpiton is not tenable the relability of the incremental *F*tests and corresponding p-vales is questionable. 
+
+```{r}
+par(mfrow=c(2,3))
+plot(out16, which = c(1,2,3,4,5,6))
+```
+
+# Logistic Regression 
+
+Hastie and Tibsirani (1990) report data on the presence or absence of kyphosis, a postoperative spinal deformity. The predictor variable is the age of the patient in months. The data are available in the \texttt{gam}-package, where the response variable is a string variable. We first recode the response variable to a 0,1 variable, where 1 indicates presence of kyphosis. Then we fit three logistic regression models, a intercept only, a logistic regression with Age as predictor, and a logistic regression with Age and Age-squared as predictors. 
+
+In this case, where we have outcomes equal to zero or one and predicted values are probabilities, the squared loss equals the Brier Score. 
+
+Two hundred repeats of 10-fold cross validation are performed using the following code. 
+
+```{r}
+library(gam)
+data(kyphosis)
+kyphosis[,1] = as.numeric(kyphosis[,1] == "present")
+models = vector(mode = "list", length = 3)
+models[[1]] = Kyphosis ~ 1
+models[[2]] = Kyphosis ~ Age
+models[[3]] = Kyphosis ~ poly(Age,2)
+output = xval.glm(data = kyphosis, models, glm.family = binomial)
+```
+
+The quadratic model has a much lower prediction error and wins in all 100 repetitions. Let us interpret the model as follows
+```{r}
+out = glm(models[[3]], data = kyphosis, family = binomial)
+summary(out)
+
+p <- ggplot(kyphosis, aes(Age, Kyphosis))
+p + geom_point() + geom_smooth(method = "glm", method.args = list(family = "binomial"), formula = y ~ poly(x, 2))
+```
+
+We see that this is a single peaked curve, first the probability goes up, later it goes down. Nowhere the probability becomes larger than 0.5, so for every person we would predict the absence of kyphosis. Around the age of 100 months there is a probability of about 40 percent that a patient has kyphosis. On the basis of age alone, we can however, not tell who that will be.
+
+## Changing the loss function
+
+We will now use two different prediction loss functions. The first is the cross validated deviance, the second the misclassification rate. 
+
+```{r}
+dev = function(y,preds){-2*mean(y*log(preds) + (1-y)*log(1-preds))}
+output = xval.glm(data = kyphosis, models, glm.family = binomial, loss = dev)
+```
+The results are roughly the same as with the Brier score (RMSEP). 
+
+Another often used loss function is the missclasification rate. In the following we first define this function and then use it in the cross validation. 
+```{r}
+mcr = function(y,preds){1- mean(y*(preds>.5) + (1-y)*(preds<.5))}
+output = xval.glm(data = kyphosis, models, glm.family = binomial, loss = mcr)
+```
+We see that in this case the intercept only model performs best. Although most of the time all three models predict for every case absence of kyphosis in all repeats of all folds. These examples clearly show that the choice of loss function has a large impact on the results. 
+
+## Standard analysis approach
+
+```{r}
+out1 = glm(models[[1]], data = kyphosis, family = binomial)
+out2 = glm(models[[2]], data = kyphosis, family = binomial)
+out3 = glm(models[[3]], data = kyphosis, family = binomial)
+anova(out1,out2,out3)
+```
+
+
+# Comparing two theories
+
+In Pollack et al. (2012) the authors investigate the effect of economic stress on intentions to disengage from entrepreneural activities. The participants in this study were 262 entrepreneurs who were members of a networking group for small-business owners, 
+who responded to an online survey about recent performance of their business, and their emotional and cognitive responses to the economic climate. 
+
+The participants were asked a series of questions about how they felt their business was doing.  Their responses were used to create an index of economic stress (**estress**, higher scores reflecting greater stress)
+
+They were asked  the extent to which they had various feelings related to their business, such as discouraged, hopeless, worthless, and the like, an aggregation of which was used to quantify business-related depressed affect (**affect**, higher scores reflecting more depressed affect). 
+
+Another measure is entrepreneurial self-efficacy: this measure indexes a person's confidence in his or her ability to succesfully engage in various entrepreneurship-related 
+tasks such as setting and meeting goals, creating new products, managing risk, and making decisions (**ese**). 
+
+Finally, they were also asked a set of questions to quantify their intentions to withdraw from entrepreneuship in the next year (**withdraw**, higher scores indicative for greater withdrawal intentions). Moreover, we have a set of covariates: **sex** (0 = female; 1 = male), **age** in years, and **tenure** (length of time in business). 
+
+For these data there are two theories: 
+- The first theory says that economic stress has an influence on withdrawal intentions but that this effect is mediated by business-related depressed affect. Taking the covariates into account this leads to a regression model with **withdraw** as response and **estress**, **affect**, **sex**, **age**, and **tenure** as predictors. 
+- A second theory is that economic stress is not at all related to withdrawal intentions and that withdrawal intentions are just an effect of individual differences. That is, more confident persons have less depressed affect and therefore less intentions to withdraw. Taking the covariates into account this leads to a regression model with **withdraw** as response and **ese**, **affect**, **sex**, **age**, and **tenure** as predictors. 
+
+```{r}
+library(foreign)
+ecdata = read.spss("~/surfdrive/Shared/CVtutorial/estress.sav", to.data.frame = TRUE)
+models = vector(mode = "list", length = 2)
+models[[1]] = withdraw ~ tenure + estress + affect + sex + age
+models[[2]] = withdraw ~ tenure + affect + sex + age + ese
+output = xval.glm(data = ecdata, models)
+```
+
+## Standard analysis approach
+
+This is a more difficult situation because the two models are not nested. Therefore, a comparison using statistical tests is not possible. Researchers could use an information criterion like the AIC or BIC. 
+
+# The output object
+
+The \texttt{xval.glm} function outputs an object with the following ingredients:
+```{r}
+names(output)
+```
+
+In the following we will show one by one these for the analysis in the last section.
+
+```{r}
+output$models
+```
+shows the models that were selected by the researcher to compare.
+
+```{r}
+output$glms
+```
+Shows the standard glm output for each of the requested models on the complete data set.
+
+```{r}
+head(output$data)
+```
+Gives the input data set.
+
+```{r}
+output$stab.plot
+```
+Shows the proportion of wins of each model over the repeated cross validations. Can be used in order to check whether more repetitions are needed for the cross validation.
+
+```{r}
+output$box.plot
+```
+Gives the boxplot of the prediction error for each model over the 200 repetitions.
+
+```{r}
+output$den.plot
+```
+Gives the density plot of the prediction error for each model.  
+
+```{r}
+head(output$win.matrix)
+```
+Shows for each cycle of cross validation which model had the lowest prediction error
+
+```{r}
+output$wins
+```
+Shows the total number of wins for each model.
+
+```{r}
+output$summary
+```
+Gives the screen output of the function.
+
+```{r}
+head(output$RMSEP)
+```
+Gives for each model, for every cross validation cycle the estimated prediction error (RMSEP)
+
+
