@@ -78,13 +78,23 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   tstart <- Sys.time()
   cat('Running Cross-validation...')
 
+  #make output lists
+  out <- list()
+  preds <- array(NA,dim=c(n,repeats,M))
+
   #parallel loop of repeats
   if(!is.null(numCore)) {
-    out <- foreach(1:repeats,.combine = c) %dopar% {
+    tot_cval_out <- foreach(1:repeats,.combine = c) %dopar% {
 
-      RMSEP <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
+     cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
 
-      return(list(RMSEP))
+      return(list(cval_out))
+    }
+
+    #get parallel output in correct output objects
+    for(i in 1:repeats) {
+      out <- c(out,tot_cval_out[[i]]$loss)
+      preds[,i,] <- tot_cval_out[[i]]$pred
     }
 
     #stop parallel loop
@@ -92,9 +102,10 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   } else {
 
-    out <- list()
     for(i in 1:repeats) {
-      out <- c(out,cross.validate(M, folds, n, K, glm.family, data, y, models, loss))
+      cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
+      out <- c(out,cval_out$loss)
+      preds[,i,] <- cval_out$pred
     }
   }
 
@@ -113,6 +124,13 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   }
   wins <- apply(winmat,2,sum)
 
+  #concatenate cross-validation results
+  cv.pe <- matrix(NA,M*repeats,2)
+  colnames(cv.pe) <- c("Model", "RMSEP")
+  cv.pe[,1] <- rep(seq(1,M), each = repeats)
+  cv.pe[,2] <- RMSEP
+  cv.pe <- as.data.frame(cv.pe)
+
   #check stability (cumulative proportion of wins over repeats)
   stab <- data.frame()
   startstab <- 10
@@ -128,12 +146,6 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     if(gray) p1 <- p1 + scale_color_grey()
 
     # make boxplot
-    cv.pe <- matrix(NA,M*repeats,2)
-    colnames(cv.pe) <- c("Model", "RMSEP")
-    cv.pe[,1] <- rep(seq(1,M), each = repeats)
-    cv.pe[,2] <- RMSEP
-    cv.pe <- as.data.frame(cv.pe)
-
     p <- ggplot(cv.pe, aes(x=Model, y=RMSEP,fill=factor(Model)))
     p <- p + geom_boxplot(aes(group = factor(Model))) + geom_jitter(width = 0.05, height = 0, colour = rgb(0,0,0,.3))
     p <- p + scale_x_continuous(breaks = seq(1,M), sec.axis = sec_axis(trans ~ ., name = "Number of Wins", breaks = seq(1,M), labels = wins))
@@ -193,6 +205,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     models = models,
     glms = glmlist,
     data = data,
+    preds = list(preds = preds,y = y),
     stab.plot = p1,
     box.plot = p,
     den.plot = p2,
@@ -218,6 +231,8 @@ cross.validate <- function(M, folds, n, K, glm.family, data, y, models, loss) {
     #resample folds
     folds <- sample(folds, replace = FALSE)
 
+    total_pred <- matrix(NA,n,M)
+
     #loop of models
     for(m in 1:M) {
 
@@ -236,9 +251,11 @@ cross.validate <- function(M, folds, n, K, glm.family, data, y, models, loss) {
       } else {
         RMSEP[m] = loss(y,preds)
       }
+
+      total_pred[,m] <- preds
     }
 
-    return(RMSEP)
+    return(list(loss = RMSEP,pred = total_pred,data = y))
 }
 
 
@@ -246,4 +263,5 @@ cross.validate <- function(M, folds, n, K, glm.family, data, y, models, loss) {
 print.xval.glm <- function(x,...) {
   cat(x$summary)
 }
+
 

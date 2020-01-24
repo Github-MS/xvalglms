@@ -4,8 +4,9 @@
 \alias{xval.glm}
 \title{Run X-val on a set of glms}
 \usage{
-xval.glm(data, models, glm.family = gaussian, folds = 10, repeats = 200,
-  loss = NULL, numCore = NULL, plots = T, gray = F, seed = NULL)
+xval.glm(data, models, glm.family = gaussian, folds = 10,
+  repeats = 200, loss = NULL, numCore = NULL, plots = T,
+  gray = F, seed = NULL)
 }
 \arguments{
 \item{data}{data.frame containing the data}
