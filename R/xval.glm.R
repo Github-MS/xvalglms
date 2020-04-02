@@ -161,8 +161,8 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     p2 <- ggplot(cv.pe,aes(x=RMSEP,fill=factor(Model),cut=factor(Model))) + theme(legend.position="none",axis.ticks.y=element_blank(),axis.text.y = element_blank())
     for(i in which(cons)) p2 <- p2 + geom_vline(xintercept = cv.pe$RMSEP[cv.pe$Model==i][1])
     p2 <- p2 + geom_density(alpha = 0.5)
-    p2 <- p2 + scale_y_continuous(name = ' ', sec.axis = sec_axis(~ .,name=' '))
-    p2 <- p2 + coord_flip() + xlab(NULL)
+    p2 <- p2 + scale_y_continuous(name = ' ',breaks = 0, labels = ' ', sec.axis = sec_axis(~ .,name=' ',breaks = 0, labels = ' '))
+    p2 <- p2 + coord_flip() + xlab(NULL) + ylab(NULL)
     if(gray) p2 <- p2 + scale_fill_grey() + scale_color_grey()
 
     #make titles
