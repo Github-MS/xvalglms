@@ -151,7 +151,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     p <- p + scale_x_continuous(breaks = seq(1,M), sec.axis = sec_axis(trans ~ ., name = "Number of Wins", breaks = seq(1,M), labels = wins))
     p <- p + ylab(my.ylab)
     p <- p + theme(legend.position="none")
-    if(gray) p <- p + scale_fill_grey()
+    if(gray) p <- p + scale_fill_grey(start=.3,end=.7)
 
     #make density plots
     #detect constants
