@@ -195,6 +195,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     rmsepmean <- mean(cv.pe$RMSEP[cv.pe$Model==i])
 
     modstring <- deparse(models[[i]])
+    modstring <- gsub(" +", "", paste(modstring, collapse = "")) # length(modstring) needs to be 1
     if(nchar(modstring)>linelen) modstring <- substr(modstring,start = 1,stop = linelen)
     space <- paste0(rep(' ',(linelen+1) - nchar(modstring)),collapse='')
     l3 <- c(l3, c(paste0(sprintf(' [%2d] ',i),modstring,space,'  |  ', sprintf('%4s',as.character(round(prop[i]*100))),'%   |',sprintf('%8.3f |',round(rmsepci[1],3)),sprintf('%8.3f |',round(rmsepmean,3)),sprintf('%8.3f |',round(rmsepci[2],3)),'\n')))
