@@ -76,7 +76,6 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   #start time
   tstart <- Sys.time()
-  cat('Running Cross-validation...')
 
   #make output lists
   out <- list()
@@ -84,9 +83,12 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   #parallel loop of repeats
   if(!is.null(numCore)) {
+
+    cat('Running Cross-validation...')
+
     tot_cval_out <- foreach(it=1:repeats,.combine = c) %dopar% {
-     set.seed(it+seed)
-     cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
+    set.seed(it+seed)
+    cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
 
       return(list(cval_out))
     }
@@ -102,11 +104,16 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   } else {
 
+    cat('Running Cross-validation...\n')
+    pbar <- txtProgressBar(1,repeats,1,style=3)
+
     for(i in 1:repeats) {
       cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
       out <- c(out,cval_out$loss)
       preds[,i,] <- cval_out$pred
+      setTxtProgressBar(pbar,i)
     }
+    cat('\n')
   }
 
   #stop time
