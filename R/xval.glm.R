@@ -84,8 +84,8 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   #parallel loop of repeats
   if(!is.null(numCore)) {
-    tot_cval_out <- foreach(1:repeats,.combine = c) %dopar% {
-
+    tot_cval_out <- foreach(it=1:repeats,.combine = c) %dopar% {
+     set.seed(it+seed)
      cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
 
       return(list(cval_out))
@@ -135,8 +135,11 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   stab <- data.frame()
   startstab <- 10
   for(i in 10:nrow(winmat)) {
-    stab <- rbind(stab,data.frame(rep = i,prop = apply(winmat[1:i,],2,sum)/sum(apply(winmat[1:i,],2,sum)),model = paste0('model(',1:M,')')))
+    stab <- rbind(stab,data.frame(rep = i,prop = apply(matrix(winmat[1:i,]),2,sum)/sum(apply(matrix(winmat[1:i,]),2,sum)),model = paste0('model(',1:M,')')))
   }
+
+  #set plots to NA if no plots are requested
+  p <- p1 <- p2 <- NA
 
   if(plots) {
     #plot stability
@@ -185,7 +188,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   }
 
   #make console output
-  linelen <- 40
+  linelen <- 60
   prop <- wins/sum(wins)
   l3 <- c(paste0('Results for (',K,'-fold, ',repeats,' repeats)\n'))
   l3 <- c(l3, paste0(' Model:',paste0(rep(' ',linelen),collapse=''),'  |   Wins   |    2.5% |    mean |   97.5% |\n'))
@@ -194,8 +197,10 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     rmsepci <- quantile(cv.pe$RMSEP[cv.pe$Model==i],c(.025,.975))
     rmsepmean <- mean(cv.pe$RMSEP[cv.pe$Model==i])
 
-    modstring <- deparse(models[[i]])
-    if(nchar(modstring)>linelen) modstring <- substr(modstring,start = 1,stop = linelen)
+    modstring <- deparse(models[[i]],width.cutoff = linelen)[1]
+    mx <- nchar(modstring)
+    if(mx>linelen) mx <- linelen
+    modstring <- substr(modstring,1,mx)
     space <- paste0(rep(' ',(linelen+1) - nchar(modstring)),collapse='')
     l3 <- c(l3, c(paste0(sprintf(' [%2d] ',i),modstring,space,'  |  ', sprintf('%4s',as.character(round(prop[i]*100))),'%   |',sprintf('%8.3f |',round(rmsepci[1],3)),sprintf('%8.3f |',round(rmsepmean,3)),sprintf('%8.3f |',round(rmsepci[2],3)),'\n')))
   }
@@ -205,6 +210,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     models = models,
     glms = glmlist,
     data = data,
+    seed = seed,
     preds = list(preds = preds,y = y),
     stab.plot = p1,
     box.plot = p,
