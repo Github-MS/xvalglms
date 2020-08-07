@@ -76,7 +76,6 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   #start time
   tstart <- Sys.time()
-  cat('Running Cross-validation...')
 
   #make output lists
   out <- list()
@@ -84,9 +83,12 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   #parallel loop of repeats
   if(!is.null(numCore)) {
-    tot_cval_out <- foreach(1:repeats,.combine = c) %dopar% {
 
-     cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
+    cat('Running Cross-validation...')
+
+    tot_cval_out <- foreach(it=1:repeats,.combine = c) %dopar% {
+    set.seed(it+seed)
+    cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
 
       return(list(cval_out))
     }
@@ -102,11 +104,16 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   } else {
 
+    cat('Running Cross-validation...\n')
+    pbar <- txtProgressBar(1,repeats,1,style=3)
+
     for(i in 1:repeats) {
       cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
       out <- c(out,cval_out$loss)
       preds[,i,] <- cval_out$pred
+      setTxtProgressBar(pbar,i)
     }
+    cat('\n')
   }
 
   #stop time
@@ -135,8 +142,11 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   stab <- data.frame()
   startstab <- 10
   for(i in 10:nrow(winmat)) {
-    stab <- rbind(stab,data.frame(rep = i,prop = apply(winmat[1:i,],2,sum)/sum(apply(winmat[1:i,],2,sum)),model = paste0('model(',1:M,')')))
+    stab <- rbind(stab,data.frame(rep = i,prop = apply(matrix(winmat[1:i,]),2,sum)/sum(apply(matrix(winmat[1:i,]),2,sum)),model = paste0('model(',1:M,')')))
   }
+
+  #set plots to NA if no plots are requested
+  p <- p1 <- p2 <- NA
 
   if(plots) {
     #plot stability
@@ -151,7 +161,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     p <- p + scale_x_continuous(breaks = seq(1,M), sec.axis = sec_axis(trans ~ ., name = "Number of Wins", breaks = seq(1,M), labels = wins))
     p <- p + ylab(my.ylab)
     p <- p + theme(legend.position="none")
-    if(gray) p <- p + scale_fill_grey()
+    if(gray) p <- p + scale_fill_grey(start=.3,end=.7)
 
     #make density plots
     #detect constants
@@ -161,8 +171,8 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     p2 <- ggplot(cv.pe,aes(x=RMSEP,fill=factor(Model),cut=factor(Model))) + theme(legend.position="none",axis.ticks.y=element_blank(),axis.text.y = element_blank())
     for(i in which(cons)) p2 <- p2 + geom_vline(xintercept = cv.pe$RMSEP[cv.pe$Model==i][1])
     p2 <- p2 + geom_density(alpha = 0.5)
-    p2 <- p2 + scale_y_continuous(name = ' ', sec.axis = sec_axis(~ .,name=' '))
-    p2 <- p2 + coord_flip() + xlab(NULL)
+    p2 <- p2 + scale_y_continuous(name = ' ',breaks = 0, labels = ' ', sec.axis = sec_axis(~ .,name=' ',breaks = 0, labels = ' '))
+    p2 <- p2 + coord_flip() + xlab(NULL) + ylab(NULL)
     if(gray) p2 <- p2 + scale_fill_grey() + scale_color_grey()
 
     #make titles
@@ -185,7 +195,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   }
 
   #make console output
-  linelen <- 40
+  linelen <- 60
   prop <- wins/sum(wins)
   l3 <- c(paste0('Results for (',K,'-fold, ',repeats,' repeats)\n'))
   l3 <- c(l3, paste0(' Model:',paste0(rep(' ',linelen),collapse=''),'  |   Wins   |    2.5% |    mean |   97.5% |\n'))
@@ -194,8 +204,10 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     rmsepci <- quantile(cv.pe$RMSEP[cv.pe$Model==i],c(.025,.975))
     rmsepmean <- mean(cv.pe$RMSEP[cv.pe$Model==i])
 
-    modstring <- deparse(models[[i]])
-    if(nchar(modstring)>linelen) modstring <- substr(modstring,start = 1,stop = linelen)
+    modstring <- deparse(models[[i]],width.cutoff = linelen)[1]
+    mx <- nchar(modstring)
+    if(mx>linelen) mx <- linelen
+    modstring <- substr(modstring,1,mx)
     space <- paste0(rep(' ',(linelen+1) - nchar(modstring)),collapse='')
     l3 <- c(l3, c(paste0(sprintf(' [%2d] ',i),modstring,space,'  |  ', sprintf('%4s',as.character(round(prop[i]*100))),'%   |',sprintf('%8.3f |',round(rmsepci[1],3)),sprintf('%8.3f |',round(rmsepmean,3)),sprintf('%8.3f |',round(rmsepci[2],3)),'\n')))
   }
@@ -205,6 +217,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     models = models,
     glms = glmlist,
     data = data,
+    seed = seed,
     preds = list(preds = preds,y = y),
     stab.plot = p1,
     box.plot = p,
