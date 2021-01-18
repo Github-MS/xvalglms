@@ -10,12 +10,13 @@
 #' @param plots output fancy plots with results
 #' @param gray output greyscale plots (default = F)
 #' @param seed seed for the folds (default = NULL, seed will be random)
+#' @param showConsoleOutput show console output, set to FALSE to suppress all conole output (default = TRUE)
 #'
 #'
 #' @return object of class \code{xval.glm}
 #'
 #' @export
-xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 200, loss = NULL, numCore = NULL, plots = T, gray = F, seed = NULL) {
+xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 200, loss = NULL, numCore = NULL, plots = T, gray = F, seed = NULL, showConsoleOutput = T) {
   # -------------------------------------------------------------
   # function to do K-fold cross validation on a set of glms
   # data is a data frame
@@ -54,7 +55,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
     cl <- makeCluster(numCore)
 
-    cat('Using',numCore,'cores.\n')
+    if(showConsoleOutput) cat('Using',numCore,'cores.\n')
 
     #register cluster
     registerDoParallel(cl)
@@ -84,7 +85,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   #parallel loop of repeats
   if(!is.null(numCore)) {
 
-    cat('Running Cross-validation...')
+    if(showConsoleOutput) cat('Running Cross-validation...')
 
     tot_cval_out <- foreach(it=1:repeats,.combine = c) %dopar% {
     set.seed(it+seed)
@@ -104,21 +105,21 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   } else {
 
-    cat('Running Cross-validation...\n')
-    pbar <- txtProgressBar(1,repeats,1,style=3)
+    if(showConsoleOutput) cat('Running Cross-validation...\n')
+    if(showConsoleOutput) pbar <- txtProgressBar(1,repeats,1,style=3)
 
     for(i in 1:repeats) {
       cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
       out <- c(out,cval_out$loss)
       preds[,i,] <- cval_out$pred
-      setTxtProgressBar(pbar,i)
+      if(showConsoleOutput) setTxtProgressBar(pbar,i)
     }
-    cat('\n')
+    if(showConsoleOutput) cat('\n')
   }
 
   #stop time
   tend <- Sys.time()
-  cat(paste0('done [ ',round(as.numeric(difftime(tend,tstart,units='sec')),1),' sec ]\n'))
+  if(showConsoleOutput) cat(paste0('done [ ',round(as.numeric(difftime(tend,tstart,units='sec')),1),' sec ]\n'))
 
   #put all repeats in nice matrix
   RMSEP <- matrix(unlist(out), ncol = M, nrow = repeats, byrow = T)
@@ -229,7 +230,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   attr(output,"class") <- 'xval.glm'
 
   #output to console
-  cat(output$summary)
+  if(showConsoleOutput) cat(output$summary)
 
   return(invisible(output))
 
