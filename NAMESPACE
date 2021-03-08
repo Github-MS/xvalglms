@@ -2,3 +2,12 @@
 
 S3method(print,xval.glm)
 export(xval.glm)
+import(doParallel)
+import(foreach)
+import(ggplot2)
+import(gridExtra)
+import(parallel)
+import(stats)
+importFrom(grDevices,rgb)
+importFrom(stats,glm)
+importFrom(stats,predict)

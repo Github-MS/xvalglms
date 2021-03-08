@@ -6,6 +6,28 @@
 \usage{
 cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
 }
+\arguments{
+\item{M}{NA}
+
+\item{folds}{NA}
+
+\item{n}{NA}
+
+\item{K}{NA}
+
+\item{glm.family}{NA}
+
+\item{data}{NA}
+
+\item{y}{NA}
+
+\item{models}{NA}
+
+\item{loss}{NA}
+}
+\value{
+list with cross-validation output.
+}
 \description{
 cross validation function (only used internally)
 }

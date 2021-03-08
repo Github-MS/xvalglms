@@ -14,7 +14,13 @@
 #'
 #'
 #' @return object of class \code{xval.glm}
-#'
+#' @importFrom grDevices rgb
+#' @import parallel
+#' @import stats
+#' @import doParallel
+#' @import ggplot2
+#' @import foreach
+#' @import gridExtra
 #' @export
 xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 200, loss = NULL, numCore = NULL, plots = T, gray = F, seed = NULL, showConsoleOutput = T) {
   # -------------------------------------------------------------
@@ -106,15 +112,15 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   } else {
 
     if(showConsoleOutput) cat('Running Cross-validation...\n')
-    if(showConsoleOutput) pbar <- txtProgressBar(1,repeats,1,style=3)
+    #if(showConsoleOutput) pbar <- txtProgressBar(1,repeats,1,style=3)
 
     for(i in 1:repeats) {
       cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
       out <- c(out,cval_out$loss)
       preds[,i,] <- cval_out$pred
-      if(showConsoleOutput) setTxtProgressBar(pbar,i)
+      #if(showConsoleOutput) setTxtProgressBar(pbar,i)
     }
-    if(showConsoleOutput) cat('\n')
+    #if(showConsoleOutput) cat('\n')
   }
 
   #stop time
@@ -142,10 +148,15 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   #check stability (cumulative proportion of wins over repeats)
   stab <- data.frame()
   startstab <- 10
-  for(i in 10:nrow(winmat)) {
-    stab <- rbind(stab,data.frame(rep = i,prop = apply(matrix(winmat[1:i,]),2,sum)/sum(apply(matrix(winmat[1:i,]),2,sum)),model = paste0('model(',1:M,')')))
+  
+  if(ncol(winmat)>1) {
+    for(i in 10:nrow(winmat)) {
+      stab <- rbind(stab,data.frame(rep = i,prop = apply(winmat[1:i,],2,sum)/sum(apply(winmat[1:i,],2,sum)),model = paste0('model(',1:M,')')))
+    }
+  } else {
+    stab <- data.frame(rep=1:nrow(winmat),prop=rep(1,nrow(winmat)),model=paste0('model(',1:M,')'))
   }
-
+  
   #set plots to NA if no plots are requested
   p <- p1 <- p2 <- NA
 
@@ -186,7 +197,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
         label=paste0(my.ylab,'\n (',K,'-fold, ',repeats,' repeats) \nModel ',which.max(wins),' wins.'))
 
     #plot all
-    grid.arrange(p1, titleplot, p, p2, ncol=2, nrow=2, widths=c(5, 2), heights=c(2, 5))
+    totplot <- grid.arrange(p1, titleplot, p, p2, ncol=2, nrow=2, widths=c(5, 2), heights=c(2, 5))
   }
 
   #make glm lists
@@ -220,6 +231,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     data = data,
     seed = seed,
     preds = list(preds = preds,y = y),
+    full.plot = totplot,
     stab.plot = p1,
     box.plot = p,
     den.plot = p2,
@@ -237,6 +249,20 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 }
 
 #' cross validation function (only used internally)
+#' @param M NA
+#' @param folds NA
+#' @param n NA
+#' @param K NA
+#' @param glm.family NA
+#' @param data NA
+#' @param y NA
+#' @param models NA
+#' @param loss NA
+#'
+#' @importFrom stats glm
+#' @importFrom stats predict
+#' 
+#' @return list with cross-validation output.
 cross.validate <- function(M, folds, n, K, glm.family, data, y, models, loss) {
 
     #set RMSEP

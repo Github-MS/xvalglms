@@ -1,12 +1,12 @@
 Package: xvalglms
 Type: Package
 Title: Cross-validation for Generalized Linear Models
-Version: 0.1.7
+Version: 0.1.8
 Author: Wouter Weeda, Mark de Rooij
 Maintainer: Wouter Weeda <w.d.weeda@fsw.leidenuniv.nl>
 Description: Perform cross-validation on Generalized Linear Models (GLM) to select an optimally predictive model.
-Depends: foreach, doParallel, ggplot2, gridExtra
+Depends: foreach, doParallel, ggplot2, gridExtra, parallel, stats
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.1

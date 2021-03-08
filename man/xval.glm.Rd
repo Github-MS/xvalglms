@@ -4,9 +4,19 @@
 \alias{xval.glm}
 \title{Run X-val on a set of glms}
 \usage{
-xval.glm(data, models, glm.family = gaussian, folds = 10,
-  repeats = 200, loss = NULL, numCore = NULL, plots = T,
-  gray = F, seed = NULL)
+xval.glm(
+  data,
+  models,
+  glm.family = gaussian,
+  folds = 10,
+  repeats = 200,
+  loss = NULL,
+  numCore = NULL,
+  plots = T,
+  gray = F,
+  seed = NULL,
+  showConsoleOutput = T
+)
 }
 \arguments{
 \item{data}{data.frame containing the data}
@@ -28,6 +38,8 @@ xval.glm(data, models, glm.family = gaussian, folds = 10,
 \item{gray}{output greyscale plots (default = F)}
 
 \item{seed}{seed for the folds (default = NULL, seed will be random)}
+
+\item{showConsoleOutput}{show console output, set to FALSE to suppress all conole output (default = TRUE)}
 }
 \value{
 object of class \code{xval.glm}
