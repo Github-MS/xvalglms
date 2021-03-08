@@ -10,12 +10,19 @@
 #' @param plots output fancy plots with results
 #' @param gray output greyscale plots (default = F)
 #' @param seed seed for the folds (default = NULL, seed will be random)
+#' @param showConsoleOutput show console output, set to FALSE to suppress all conole output (default = TRUE)
 #'
 #'
 #' @return object of class \code{xval.glm}
-#'
+#' @importFrom grDevices rgb
+#' @import parallel
+#' @import stats
+#' @import doParallel
+#' @import ggplot2
+#' @import foreach
+#' @import gridExtra
 #' @export
-xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 200, loss = NULL, numCore = NULL, plots = T, gray = F, seed = NULL) {
+xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 200, loss = NULL, numCore = NULL, plots = T, gray = F, seed = NULL, showConsoleOutput = T) {
   # -------------------------------------------------------------
   # function to do K-fold cross validation on a set of glms
   # data is a data frame
@@ -54,7 +61,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
     cl <- makeCluster(numCore)
 
-    cat('Using',numCore,'cores.\n')
+    if(showConsoleOutput) cat('Using',numCore,'cores.\n')
 
     #register cluster
     registerDoParallel(cl)
@@ -84,7 +91,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   #parallel loop of repeats
   if(!is.null(numCore)) {
 
-    cat('Running Cross-validation...')
+    if(showConsoleOutput) cat('Running Cross-validation...')
 
     tot_cval_out <- foreach(it=1:repeats,.combine = c) %dopar% {
     set.seed(it+seed)
@@ -104,21 +111,21 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
 
   } else {
 
-    cat('Running Cross-validation...\n')
-    pbar <- txtProgressBar(1,repeats,1,style=3)
+    if(showConsoleOutput) cat('Running Cross-validation...\n')
+    #if(showConsoleOutput) pbar <- txtProgressBar(1,repeats,1,style=3)
 
     for(i in 1:repeats) {
       cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
       out <- c(out,cval_out$loss)
       preds[,i,] <- cval_out$pred
-      setTxtProgressBar(pbar,i)
+      #if(showConsoleOutput) setTxtProgressBar(pbar,i)
     }
-    cat('\n')
+    #if(showConsoleOutput) cat('\n')
   }
 
   #stop time
   tend <- Sys.time()
-  cat(paste0('done [ ',round(as.numeric(difftime(tend,tstart,units='sec')),1),' sec ]\n'))
+  if(showConsoleOutput) cat(paste0('done [ ',round(as.numeric(difftime(tend,tstart,units='sec')),1),' sec ]\n'))
 
   #put all repeats in nice matrix
   RMSEP <- matrix(unlist(out), ncol = M, nrow = repeats, byrow = T)
@@ -141,10 +148,15 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   #check stability (cumulative proportion of wins over repeats)
   stab <- data.frame()
   startstab <- 10
-  for(i in 10:nrow(winmat)) {
-    stab <- rbind(stab,data.frame(rep = i,prop = apply(matrix(winmat[1:i,]),2,sum)/sum(apply(matrix(winmat[1:i,]),2,sum)),model = paste0('model(',1:M,')')))
+  
+  if(ncol(winmat)>1) {
+    for(i in 10:nrow(winmat)) {
+      stab <- rbind(stab,data.frame(rep = i,prop = apply(winmat[1:i,],2,sum)/sum(apply(winmat[1:i,],2,sum)),model = paste0('model(',1:M,')')))
+    }
+  } else {
+    stab <- data.frame(rep=1:nrow(winmat),prop=rep(1,nrow(winmat)),model=paste0('model(',1:M,')'))
   }
-
+  
   #set plots to NA if no plots are requested
   p <- p1 <- p2 <- NA
 
@@ -185,7 +197,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
         label=paste0(my.ylab,'\n (',K,'-fold, ',repeats,' repeats) \nModel ',which.max(wins),' wins.'))
 
     #plot all
-    grid.arrange(p1, titleplot, p, p2, ncol=2, nrow=2, widths=c(5, 2), heights=c(2, 5))
+    totplot <- grid.arrange(p1, titleplot, p, p2, ncol=2, nrow=2, widths=c(5, 2), heights=c(2, 5))
   }
 
   #make glm lists
@@ -219,6 +231,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     data = data,
     seed = seed,
     preds = list(preds = preds,y = y),
+    full.plot = totplot,
     stab.plot = p1,
     box.plot = p,
     den.plot = p2,
@@ -229,13 +242,27 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   attr(output,"class") <- 'xval.glm'
 
   #output to console
-  cat(output$summary)
+  if(showConsoleOutput) cat(output$summary)
 
   return(invisible(output))
 
 }
 
 #' cross validation function (only used internally)
+#' @param M NA
+#' @param folds NA
+#' @param n NA
+#' @param K NA
+#' @param glm.family NA
+#' @param data NA
+#' @param y NA
+#' @param models NA
+#' @param loss NA
+#'
+#' @importFrom stats glm
+#' @importFrom stats predict
+#' 
+#' @return list with cross-validation output.
 cross.validate <- function(M, folds, n, K, glm.family, data, y, models, loss) {
 
     #set RMSEP
