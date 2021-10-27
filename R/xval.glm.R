@@ -87,6 +87,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
   #make output lists
   out <- list()
   preds <- array(NA,dim=c(n,repeats,M))
+  foldids <- matrix(NA,nrow=n,ncol=repeats)
 
   #parallel loop of repeats
   if(!is.null(numCore)) {
@@ -104,6 +105,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     for(i in 1:repeats) {
       out <- c(out,tot_cval_out[[i]]$loss)
       preds[,i,] <- tot_cval_out[[i]]$pred
+      foldids[,i] <- tot_cval_out[[i]]$folds
     }
 
     #stop parallel loop
@@ -118,6 +120,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
       cval_out <- cross.validate(M, folds, n, K, glm.family, data, y, models, loss)
       out <- c(out,cval_out$loss)
       preds[,i,] <- cval_out$pred
+      foldids[,i] <- cval_out$folds
       #if(showConsoleOutput) setTxtProgressBar(pbar,i)
     }
     #if(showConsoleOutput) cat('\n')
@@ -229,6 +232,7 @@ xval.glm <- function(data, models, glm.family = gaussian, folds = 10, repeats = 
     models = models,
     glms = glmlist,
     data = data,
+    foldids = foldids,
     seed = seed,
     preds = list(preds = preds,y = y),
     full.plot = totplot,
@@ -295,7 +299,7 @@ cross.validate <- function(M, folds, n, K, glm.family, data, y, models, loss) {
       total_pred[,m] <- preds
     }
 
-    return(list(loss = RMSEP,pred = total_pred,data = y))
+    return(list(loss = RMSEP,pred = total_pred,data = y,folds = folds))
 }
 
 
